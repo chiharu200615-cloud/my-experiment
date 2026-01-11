@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Self-Paced Reading Experiment</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/jspsych@7.3.4/dist/index.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-html-keyboard-response@1.1.3/dist/index.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@jspsych/plugin-survey-html-form@1.0.3/dist/index.browser.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/jspsych@7.3.4/dist/jspsych.css" rel="stylesheet" />
+
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.8; background-color: white; }
+    .sentence { font-size: 28px; text-align: center; margin-top: 150px; }
+    .instruction { max-width: 800px; margin: 50px auto; font-size: 18px; }
+  </style>
+</head>
+
+<body>
+  <div id="display_area"></div>
+  <script>
+    window.onload = function() {
+      const jsPsych = initJsPsych({
+        display_element: 'display_area',
+        on_finish: function() {
+          // 実験終了時にCSVで自動保存
+          jsPsych.data.get().localSave('csv', 'sr_or_results.csv');
+        }
+      });
+
+      /* ユーティリティ関数 */
+      function selfPacedSentence(sentence, meta) {
+        const words = sentence.split(" ");
+        let timeline = [];
+        let current = [];
+        words.forEach((word, index) => {
+          timeline.push({
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: `<div class="sentence">${current.join(" ")} <strong>${word}</strong></div>`,
+            choices: [" "],
+            data: { ...meta, word: word, word_position: index + 1 },
+            on_finish: function() { current.push(word); }
+          });
+        });
+        return timeline;
+      }
+
+      function comprehensionQuestion(question, correct, meta) {
+        return {
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: `<div class="sentence">${question}<br><br><p>F = Yes　／　J = No</p></div>`,
+          choices: ["f", "j"],
+          data: { ...meta, question: question, correct_answer: correct },
+          on_finish: function(data) {
+            data.response_yesno = (data.response === "f") ? "Yes" : "No";
+            data.correct = (data.response_yesno === correct);
+          }
+        };
+      }
+
+      const timeline = [];
+
+      /* 1. 説明（練習） */
+      timeline.push({
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: `<div class="instruction"><h2>【練習問題】</h2><p>これから英文が 1語ずつ 表示されます。スペースキーを押すと次の語が表示されます。</p><p>文を最後まで読んだあと、Yes / No の質問が出ます。F=Yes, J=No で答えてください。</p><p>スペースキーで練習を開始します。</p></div>`,
+        choices: [" "]
+      });
+
+      /* 2. 練習試行 */
+      timeline.push(...selfPacedSentence("The girl who helped the boy smiled.", {phase: "practice", structure: "SR"}));
+      timeline.push(comprehensionQuestion("Did the girl help the boy?", "Yes", {phase: "practice"}));
+
+      /* 3. 本試行の説明 */
+      timeline.push({
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: `<div class="instruction"><h2>【本試行】</h2><p>ここからが本番です。手順は練習と同じです。</p><p>できるだけ自然なペースで読み進めてください。</p><p>スペースキーで開始します。</p></div>`,
+        choices: [" "]
+      });
+
+      /* 4. 本試行の項目 */
+      const main_items = [
+        { s: "The boy who chased the dog fell down.", q: "Did the boy chase the dog?", c: "Yes", st: "SR" },
+        { s: "The boy who the dog chased fell down.", q: "Did the boy chase the dog?", c: "No", st: "OR" },
+        { s: "The girl who helped the man smiled.", q: "Did the girl help the man?", c: "Yes", st: "SR" },
+        { s: "The girl who the man helped smiled.", q: "Did the girl help the man?", c: "No", st: "OR" },
+        { s: "The teacher who called the student waited outside.", q: "Did the teacher call the student?", c: "Yes", st: "SR" },
+        { s: "The teacher who the student called waited outside.", q: "Did the teacher call the student?", c: "No", st: "OR" },
+        { s: "The scientist who analyzed the data published the report.", q: "Did the scientist analyze the data?", c: "Yes", st: "SR" },
+        { s: "The scientist who the data analyzed published the report.", q: "Did the scientist analyze the data?", c: "No", st: "OR" },
+        { s: "The lawyer who defended the client questioned the witness.", q: "Did the lawyer defend the client?", c: "Yes", st: "SR" },
+        { s: "The lawyer who the client defended questioned the witness.", q: "Did the lawyer defend the client?", c: "No", st: "OR" }
+      ];
+
+      // ランダム化
+      const shuffled_items = jsPsych.randomization.shuffle(main_items);
+      shuffled_items.forEach(item => {
+        timeline.push(...selfPacedSentence(item.s, {phase: "main", structure: item.st}));
+        timeline.push(comprehensionQuestion(item.q, item.c, {phase: "main"}));
+      });
+
+      /* 5. TOEIC入力 */
+      timeline.push({
+        type: jsPsychSurveyHtmlForm,
+        html: `<div class="instruction"><p>お疲れ様でした。最後にTOEICスコアを入力してください：</p><input name="toeic" type="text" style="width:200px;" required><p>入力後、「送信」を押すとデータが保存されます。</p><button type="submit" class="jspsych-btn">送信</button></div>`,
+        data: {phase: "toeic"}
+      });
+
+      jsPsych.run(timeline);
+    };
+  </script>
+</body>
+</html>
